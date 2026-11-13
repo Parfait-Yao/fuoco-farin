@@ -34,3 +34,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# all env files hold secrets (keep only the template)
+.env
+.env.*
+!.env.example
+
+# verification builds (NEXT_DIST_DIR)
+/.next-build/
+
+# old prototype kept locally only
+/.prototype-backup/

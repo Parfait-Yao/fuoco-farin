@@ -1,0 +1,731 @@
+// Fuoco & Farina — Pizza Delivery data model.
+//
+// Conventions
+// - Money is stored as Int in US cents (1299 = $12.99).
+// - Catalog text has a French column and an optional English column (*En);
+//   the API returns the English text when the request language is English.
+// - Tables use snake_case plural names (@@map); columns keep Prisma camelCase.
+// - Identity lives in Supabase Auth (auth.users). `User.id` is the same UUID,
+//   created by the `on_auth_user_created` trigger (see migration 0002).
+// - Soft delete (`deletedAt`) on catalog and promotions so old orders,
+//   reviews and favorites keep their references.
+// - Orders store a snapshot (names, prices, address, customer) and never
+//   read the live catalog again.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // Supabase pooler (port 6543, ?pgbouncer=true)
+  directUrl = env("DIRECT_URL") // Supabase direct / session connection (port 5432), used by migrations
+}
+
+/**
+ * ───────────────────────────── Enums ─────────────────────────────
+ */
+
+enum Role {
+  CLIENT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+/// Builder ingredients (BASE, SAUCE, CHEESE, VEGETABLE) are stock items.
+/// TOPPING is a catalog-only ingredient shown on fixed recipes.
+enum IngredientKind {
+  BASE
+  SAUCE
+  CHEESE
+  VEGETABLE
+  TOPPING
+}
+
+enum StockUnit {
+  KG
+  G
+  L
+  PIECE
+}
+
+enum PizzaSize {
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum OrderStatus {
+  RECEIVED
+  IN_KITCHEN
+  SENT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum DeliveryMode {
+  STANDARD
+  EXPRESS
+  PICKUP
+}
+
+enum PaymentMethod {
+  STRIPE
+  RAZORPAY
+  ORANGE_MONEY
+  MTN_MOMO
+  WAVE
+  CARD
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  RAZORPAY
+  CASH
+}
+
+enum PaymentTransactionStatus {
+  CREATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PromotionKind {
+  PERCENT
+  FIXED
+}
+
+enum NotificationKind {
+  ORDER
+  PROMO
+  STOCK
+  SYSTEM
+  REVIEW
+}
+
+enum StockMovementKind {
+  IN
+  OUT
+  ORDER
+  ORDER_CANCEL
+  ADJUSTMENT
+  THRESHOLD
+}
+
+enum ActivityKind {
+  ORDER
+  STOCK
+  CUSTOMER
+  REVIEW
+  CATALOG
+}
+
+/**
+ * ───────────────────────────── Users ─────────────────────────────
+ */
+
+/// Profile row for a Supabase Auth user. Same id as auth.users.id.
+model User {
+  id                 String     @id @db.Uuid
+  email              String     @unique
+  role               Role       @default(CLIENT)
+  status             UserStatus @default(ACTIVE)
+  firstName          String     @default("")
+  lastName           String     @default("")
+  phone              String     @default("")
+  avatarUrl          String?
+  /// R2 object key of the avatar, used to delete the old file on replace.
+  avatarKey          String?
+  emailVerifiedAt    DateTime?
+  lastLoginAt        DateTime?
+  /// Set once the welcome email is sent (after email verification).
+  welcomeEmailSentAt DateTime?
+  /// Client preferences (notifications, default delivery and payment).
+  preferences        Json?
+  /// Interface and email language ("fr" or "en").
+  locale             String     @default("fr")
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  deletedAt          DateTime?
+
+  addresses      Address[]
+  cart           Cart?
+  customPizzas   CustomPizza[]
+  orders         Order[]
+  statusChanges  OrderStatusHistory[]
+  reviews        Review[]
+  favorites      Favorite[]
+  notifications  Notification[]
+  stockMovements StockMovement[]
+  activityLogs   ActivityLog[]
+
+  @@index([role, status])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Address {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  label     String
+  street    String
+  district  String
+  city      String
+  details   String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+/**
+ * ──────────────────────────── Catalog ────────────────────────────
+ */
+
+model Category {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String
+  nameEn        String    @default("")
+  slug          String    @unique
+  description   String    @default("")
+  descriptionEn String    @default("")
+  imageUrl      String
+  imageKey      String?
+  sortOrder     Int       @default(0)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  pizzas Pizza[]
+
+  @@index([active, sortOrder])
+  @@map("categories")
+}
+
+model Pizza {
+  id                String    @id @default(uuid()) @db.Uuid
+  slug              String    @unique
+  name              String
+  nameEn            String    @default("")
+  description       String
+  descriptionEn     String    @default("")
+  longDescription   String    @default("")
+  longDescriptionEn String    @default("")
+  categoryId        String    @db.Uuid
+  imageUrl          String
+  imageKey          String?
+  /// Medium-size price in cents. Small and large derive from size multipliers.
+  price             Int
+  /// Optional crossed-out price in cents.
+  oldPrice          Int?
+  prepMinutes       Int       @default(12)
+  calories          Int       @default(800)
+  isPopular         Boolean   @default(false)
+  isNew             Boolean   @default(false)
+  isVegetarian      Boolean   @default(false)
+  isSpicy           Boolean   @default(false)
+  active            Boolean   @default(true)
+  /// Denormalized from published reviews, refreshed on review moderation.
+  ratingAvg         Decimal   @default(0) @db.Decimal(3, 2)
+  reviewCount       Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  category    Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  ingredients PizzaIngredient[]
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  reviews     Review[]
+  favorites   Favorite[]
+
+  @@index([categoryId])
+  @@index([active, deletedAt])
+  @@index([price])
+  @@map("pizzas")
+}
+
+/// One table for every ingredient. PizzaBase, Sauce, Cheese and Vegetable
+/// are the BASE, SAUCE, CHEESE and VEGETABLE kinds; they carry stock.
+model Ingredient {
+  id                String         @id @default(uuid()) @db.Uuid
+  /// Stable code used by the builder and seeds (e.g. "base-classic").
+  code              String         @unique
+  kind              IngredientKind
+  name              String
+  nameEn            String         @default("")
+  description       String         @default("")
+  descriptionEn     String         @default("")
+  /// Extra price in cents when chosen in the builder.
+  price             Int            @default(0)
+  /// Preview color in the builder.
+  color             String         @default("#cccccc")
+  unit              StockUnit      @default(KG)
+  stock             Decimal        @default(0) @db.Decimal(12, 3)
+  threshold         Decimal        @default(0) @db.Decimal(12, 3)
+  /// Quantity consumed per medium pizza, in `unit`.
+  usagePerPizza     Decimal        @default(0) @db.Decimal(12, 3)
+  /// False for items without stock tracking (e.g. "Sans fromage", toppings).
+  trackStock        Boolean        @default(true)
+  active            Boolean        @default(true)
+  sortOrder         Int            @default(0)
+  /// Set when a low-stock alert is sent; cleared when stock goes back above the threshold.
+  lowStockAlertedAt DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+
+  pizzas          PizzaIngredient[]
+  movements       StockMovement[]
+  basePizzas      CustomPizza[]          @relation("CustomPizzaBase")
+  saucePizzas     CustomPizza[]          @relation("CustomPizzaSauce")
+  cheesePizzas    CustomPizza[]          @relation("CustomPizzaCheese")
+  vegetablePizzas CustomPizzaVegetable[]
+
+  @@index([kind, active])
+  @@map("ingredients")
+}
+
+model PizzaIngredient {
+  pizzaId      String  @db.Uuid
+  ingredientId String  @db.Uuid
+  position     Int     @default(0)
+  /// Customers may remove optional ingredients from the cart.
+  removable    Boolean @default(true)
+
+  pizza      Pizza      @relation(fields: [pizzaId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@id([pizzaId, ingredientId])
+  @@index([ingredientId])
+  @@map("pizza_ingredients")
+}
+
+/// A composition from the builder. Price is always computed on the server.
+model CustomPizza {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  name      String   @default("Ma pizza")
+  baseId    String   @db.Uuid
+  sauceId   String   @db.Uuid
+  cheeseId  String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  user       User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  base       Ingredient             @relation("CustomPizzaBase", fields: [baseId], references: [id], onDelete: Restrict)
+  sauce      Ingredient             @relation("CustomPizzaSauce", fields: [sauceId], references: [id], onDelete: Restrict)
+  cheese     Ingredient             @relation("CustomPizzaCheese", fields: [cheeseId], references: [id], onDelete: Restrict)
+  vegetables CustomPizzaVegetable[]
+  cartItems  CartItem[]
+
+  @@index([userId])
+  @@map("custom_pizzas")
+}
+
+model CustomPizzaVegetable {
+  customPizzaId String @db.Uuid
+  ingredientId  String @db.Uuid
+  quantity      Int    @default(1)
+
+  customPizza CustomPizza @relation(fields: [customPizzaId], references: [id], onDelete: Cascade)
+  ingredient  Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@id([customPizzaId, ingredientId])
+  @@map("custom_pizza_vegetables")
+}
+
+/**
+ * ────────────────────────────── Cart ─────────────────────────────
+ */
+
+model Cart {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  promoCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@map("carts")
+}
+
+/// Exactly one of pizzaId / customPizzaId is set (CHECK in migration 0002).
+/// No price column: the server prices every line from the live catalog.
+model CartItem {
+  id                 String    @id @default(uuid()) @db.Uuid
+  cartId             String    @db.Uuid
+  pizzaId            String?   @db.Uuid
+  customPizzaId      String?   @db.Uuid
+  size               PizzaSize @default(MEDIUM)
+  quantity           Int
+  removedIngredients String[]  @default([])
+  note               String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  cart        Cart         @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  pizza       Pizza?       @relation(fields: [pizzaId], references: [id], onDelete: Cascade)
+  customPizza CustomPizza? @relation(fields: [customPizzaId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+/**
+ * ───────────────────────────── Orders ────────────────────────────
+ */
+
+model Order {
+  id            String        @id @default(uuid()) @db.Uuid
+  /// Human-readable number, e.g. "FF-260412-0042".
+  number        String        @unique
+  userId        String?       @db.Uuid
+  status        OrderStatus   @default(RECEIVED)
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
+  deliveryMode  DeliveryMode
+
+  // Customer snapshot
+  customerName  String
+  customerEmail String
+  customerPhone String
+
+  // Address snapshot (null for PICKUP)
+  street   String?
+  district String?
+  city     String?
+  details  String?
+
+  /// Language of the customer when ordering, used for order emails.
+  locale      String  @default("fr")
+  // Amounts in cents, computed by the server
+  subtotal    Int
+  deliveryFee Int
+  discount    Int     @default(0)
+  total       Int
+  promotionId String? @db.Uuid
+  promoCode   String?
+
+  note          String?
+  cancelReason  String?
+  /// True once ingredient stock has been decremented for this order.
+  stockDeducted Boolean   @default(false)
+  paidAt        DateTime?
+  deliveredAt   DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user           User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  promotion      Promotion?           @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+  items          OrderItem[]
+  history        OrderStatusHistory[]
+  payments       Payment[]
+  reviews        Review[]
+  stockMovements StockMovement[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+/// Immutable snapshot of one order line.
+model OrderItem {
+  id                 String    @id @default(uuid()) @db.Uuid
+  orderId            String    @db.Uuid
+  /// Kept for stats and reviews; null if the pizza is later hard-deleted.
+  pizzaId            String?   @db.Uuid
+  name               String
+  imageUrl           String?
+  categoryName       String?
+  size               PizzaSize
+  quantity           Int
+  unitPrice          Int
+  lineTotal          Int
+  removedIngredients String[]  @default([])
+  note               String?
+  /// Builder composition snapshot: { base, sauce, cheese, vegetables[] } with ids, names, prices.
+  customConfig       Json?
+  createdAt          DateTime  @default(now())
+
+  order Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pizza Pizza? @relation(fields: [pizzaId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([pizzaId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id          String      @id @default(uuid()) @db.Uuid
+  orderId     String      @db.Uuid
+  status      OrderStatus
+  note        String?
+  changedById String?     @db.Uuid
+  createdAt   DateTime    @default(now())
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy User? @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+/**
+ * ──────────────────────────── Payments ───────────────────────────
+ */
+
+model Payment {
+  id                String                   @id @default(uuid()) @db.Uuid
+  orderId           String                   @db.Uuid
+  provider          PaymentProvider
+  status            PaymentTransactionStatus @default(CREATED)
+  /// Amount in the provider's smallest unit (cents for USD).
+  amount            Int
+  currency          String
+  providerOrderId   String?                  @unique
+  providerPaymentId String?                  @unique
+  signatureVerified Boolean                  @default(false)
+  failureReason     String?
+  raw               Json?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+/// Webhook idempotency: one row per provider event id, processed once.
+model WebhookEvent {
+  id          String          @id @default(uuid()) @db.Uuid
+  provider    PaymentProvider
+  eventId     String
+  eventType   String
+  payload     Json
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime        @default(now())
+
+  @@unique([provider, eventId])
+  @@map("webhook_events")
+}
+
+/**
+ * ─────────────────────────── Marketing ───────────────────────────
+ */
+
+model Promotion {
+  id             String        @id @default(uuid()) @db.Uuid
+  /// Stored upper-case.
+  code           String        @unique
+  label          String
+  labelEn        String        @default("")
+  kind           PromotionKind
+  /// Percent (1-100) or fixed amount in cents.
+  value          Int
+  minOrder       Int           @default(0)
+  /// Cap for PERCENT promotions, in cents.
+  maxDiscount    Int?
+  startsAt       DateTime
+  endsAt         DateTime
+  active         Boolean       @default(true)
+  /// Null means unlimited.
+  maxUses        Int?
+  maxUsesPerUser Int?
+  usageCount     Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  orders Order[]
+
+  @@index([active, startsAt, endsAt])
+  @@map("promotions")
+}
+
+model Review {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  pizzaId   String   @db.Uuid
+  /// The delivered order that makes the review eligible.
+  orderId   String   @db.Uuid
+  rating    Int      @db.SmallInt
+  comment   String
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pizza Pizza @relation(fields: [pizzaId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orderId, pizzaId])
+  @@index([pizzaId, published])
+  @@map("reviews")
+}
+
+model Favorite {
+  userId    String   @db.Uuid
+  pizzaId   String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pizza Pizza @relation(fields: [pizzaId], references: [id], onDelete: Cascade)
+
+  @@id([userId, pizzaId])
+  @@index([pizzaId])
+  @@map("favorites")
+}
+
+/// One row per recipient. Admin notifications fan out to every admin.
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  kind      NotificationKind
+  title     String
+  message   String
+  /// Message key (namespace `events`) and its variables: the text is rendered
+  /// in the reader's language. title/message keep a French copy.
+  key       String?
+  params    Json?
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+/**
+ * ───────────────────────────── Stock ─────────────────────────────
+ */
+
+model StockMovement {
+  id           String            @id @default(uuid()) @db.Uuid
+  ingredientId String            @db.Uuid
+  kind         StockMovementKind
+  /// Signed delta in the ingredient unit (negative for consumption).
+  quantity     Decimal           @db.Decimal(12, 3)
+  stockAfter   Decimal           @db.Decimal(12, 3)
+  note         String?
+  orderId      String?           @db.Uuid
+  authorId     String?           @db.Uuid
+  createdAt    DateTime          @default(now())
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  order      Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  author     User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([ingredientId, createdAt])
+  @@index([orderId])
+  @@map("stock_movements")
+}
+
+/**
+ * ──────────────────────────── Settings ───────────────────────────
+ */
+
+/// Singleton row (id = 1).
+model RestaurantSettings {
+  id                    Int      @id @default(1)
+  name                  String
+  slogan                String   @default("")
+  sloganEn              String   @default("")
+  email                 String
+  phone                 String
+  address               String
+  openingHours          String   @default("")
+  openingHoursEn        String   @default("")
+  currency              String   @default("USD")
+  /// Amounts in cents.
+  deliveryFee           Int      @default(399)
+  expressFee            Int      @default(699)
+  freeDeliveryFrom      Int      @default(3500)
+  defaultStockThreshold Int      @default(5)
+  showPromotionsBanner  Boolean  @default(true)
+  showRatings           Boolean  @default(true)
+  itemsPerPage          Int      @default(9)
+  notifyNewOrders       Boolean  @default(true)
+  notifyLowStock        Boolean  @default(true)
+  notifyNewReviews      Boolean  @default(true)
+  notifyByEmail         Boolean  @default(false)
+  updatedAt             DateTime @updatedAt
+
+  @@map("restaurant_settings")
+}
+
+/**
+ * ──────────────────────────── Activity ───────────────────────────
+ */
+
+/// Admin dashboard feed.
+model ActivityLog {
+  id        String       @id @default(uuid()) @db.Uuid
+  kind      ActivityKind
+  message   String
+  /// Message key (namespace `events`) and its variables, rendered in the reader's language.
+  key       String?
+  params    Json?
+  actorId   String?      @db.Uuid
+  createdAt DateTime     @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+/**
+ * ─────────────────────────── Marketing ───────────────────────────
+ */
+
+model NewsletterSubscriber {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String    @unique
+  createdAt      DateTime  @default(now())
+  unsubscribedAt DateTime?
+
+  @@map("newsletter_subscribers")
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String
+  subject   String
+  message   String
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("contact_messages")
+}

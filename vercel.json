@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/cron/stock-alerts", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/expire-payments", "schedule": "*/5 * * * *" }
+  ]
+}
