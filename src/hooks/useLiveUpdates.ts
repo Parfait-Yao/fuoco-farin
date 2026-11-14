@@ -6,7 +6,10 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 
-const POLL_MS = 20_000;
+/** Order refresh while an order is in progress, whatever the Realtime state. */
+const ACTIVE_POLL_MS = 8_000;
+/** Background refresh when Realtime is down (or no order is in progress). */
+const IDLE_POLL_MS = 20_000;
 const TOKEN_REFRESH_MS = 45 * 60_000;
 
 let realtime: SupabaseClient | null = null;
@@ -22,9 +25,11 @@ function client() {
 /**
  * Live order and notification updates for the signed-in user.
  * Supabase Realtime (postgres_changes, filtered by RLS) is the primary
- * channel; events only trigger a refetch through the API. While the channel
- * is not connected, a 20 s polling keeps the screens fresh, so an admin
- * status change always reaches the client without a manual reload.
+ * channel; events only trigger a refetch through the API. Realtime can report
+ * SUBSCRIBED and still drop events (expired token, network, RLS), so polling
+ * never depends on it alone: every 8 s while an order is in progress, every
+ * 20 s otherwise when the channel is down. An admin status change therefore
+ * always reaches the customer without a manual reload.
  */
 export function useLiveUpdates() {
   const user = useAuthStore((s) => s.user);
@@ -69,25 +74,33 @@ export function useLiveUpdates() {
       }
     })();
 
+    const hasActiveOrder = () => data().orders.some((o) => o.status !== 'delivered' && o.status !== 'cancelled');
+    let lastIdleRefresh = Date.now();
     const poll = setInterval(() => {
-      if (connected || document.visibilityState !== 'visible') return;
-      onOrder();
-      onNotification();
-    }, POLL_MS);
-    const refreshToken = setInterval(() => void authorize().catch(() => undefined), TOKEN_REFRESH_MS);
-    const onFocus = () => {
-      if (!connected) {
-        onOrder();
+      if (document.visibilityState !== 'visible') return;
+      if (hasActiveOrder()) onOrder();
+      if (!connected && Date.now() - lastIdleRefresh >= IDLE_POLL_MS) {
+        lastIdleRefresh = Date.now();
+        if (!hasActiveOrder()) onOrder();
         onNotification();
       }
+    }, ACTIVE_POLL_MS);
+    const refreshToken = setInterval(() => void authorize().catch(() => undefined), TOKEN_REFRESH_MS);
+    // Back on the tab: catch up at once (timers are throttled in background tabs).
+    const onFocus = () => {
+      if (document.visibilityState !== 'visible') return;
+      onOrder();
+      onNotification();
     };
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
 
     return () => {
       disposed = true;
       clearInterval(poll);
       clearInterval(refreshToken);
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
       if (channel) void client().removeChannel(channel);
     };
   }, [user, ready]);
