@@ -18,7 +18,7 @@ export function generateMetadata(): Metadata {
 export const viewport: Viewport = { themeColor: '#C8341C', width: 'device-width', initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // Language from the `locale` cookie (or Accept-Language): no URL prefix.
+  // Language from the `locale` cookie (English by default): no URL prefix.
   const locale = getLocale();
   return (
     <html lang={locale} className={`${display.variable} ${sans.variable}`}>

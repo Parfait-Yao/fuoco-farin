@@ -5,20 +5,19 @@ import { Button, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip } from '@mu
 import PublicRounded from '@mui/icons-material/PublicRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
 import { LOCALES, LOCALE_LABELS, type Locale } from '@/i18n/config';
-import { changeLocale, useLocale, useMessages } from '@/i18n/client';
+import { useChangeLocale, useLocale, useMessages } from '@/i18n/client';
 import { LocaleFlag } from './LocaleFlag';
 
-/** FR / EN choice. Saves the cookie (and the profile) then reloads the page. */
+/** FR / EN choice. Switches the language in place: no reload, no scroll jump. */
 export function LanguageSwitcher({ light = false, fullWidth = false }: { light?: boolean; fullWidth?: boolean }) {
   const locale = useLocale();
   const t = useMessages('common');
   const [anchor, setAnchor] = React.useState<HTMLElement | null>(null);
-  const [pending, setPending] = React.useState(false);
+  const changeLocale = useChangeLocale();
 
   const choose = (next: Locale) => {
     setAnchor(null);
     if (next === locale) return;
-    setPending(true);
     void changeLocale(next);
   };
 
@@ -32,7 +31,6 @@ export function LanguageSwitcher({ light = false, fullWidth = false }: { light?:
           startIcon={<PublicRounded fontSize="small" />}
           endIcon={<LocaleFlag locale={locale} size={18} />}
           onClick={(e) => setAnchor(e.currentTarget)}
-          disabled={pending}
           aria-label={`${t.language}: ${LOCALE_LABELS[locale].name}`}
           aria-haspopup="menu"
           aria-expanded={Boolean(anchor)}

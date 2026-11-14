@@ -1,16 +1,16 @@
-import { cookies, headers } from 'next/headers';
-import { DEFAULT_LOCALE, isLocale, LOCALE_COOKIE, negotiateLocale, type Locale } from './config';
+import { cookies } from 'next/headers';
+import { DEFAULT_LOCALE, isLocale, LOCALE_COOKIE, SITE_DEFAULT_LOCALE, type Locale } from './config';
 import { messagesFor, type Messages, type Namespace } from './messages';
 
 /**
- * Language of the current request: `locale` cookie, else Accept-Language.
- * Outside a request (cron jobs, scripts, tests) it falls back to French.
+ * Language of the current request: `locale` cookie, else English (site default,
+ * whatever the browser language). Outside a request (cron jobs, scripts, tests)
+ * it falls back to DEFAULT_LOCALE.
  */
 export function getLocale(): Locale {
   try {
     const cookie = cookies().get(LOCALE_COOKIE)?.value;
-    if (isLocale(cookie)) return cookie;
-    return negotiateLocale(headers().get('accept-language'));
+    return isLocale(cookie) ? cookie : SITE_DEFAULT_LOCALE;
   } catch {
     return DEFAULT_LOCALE;
   }
