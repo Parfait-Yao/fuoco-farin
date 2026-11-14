@@ -33,8 +33,12 @@ export function Reveal({ children, delay = 0, className, ...rest }: HTMLMotionPr
 
 /** Grid/list wrapper that staggers the reveal of its <StaggerItem> children. */
 export function Stagger({ children, className, ...rest }: HTMLMotionProps<'div'>) {
+  // Items often arrive after mount (async catalog). If the grid was already in view
+  // while empty, the one-shot reveal has fired and late items would stay hidden, so
+  // remount the wrapper once it gets its first items to replay the reveal.
+  const filled = React.Children.count(children) > 0;
   return (
-    <motion.div className={className} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={stagger} {...rest}>
+    <motion.div key={filled ? 'filled' : 'empty'} className={className} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={stagger} {...rest}>
       {children}
     </motion.div>
   );

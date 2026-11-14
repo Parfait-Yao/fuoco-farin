@@ -277,6 +277,8 @@ export function Testimonials() {
   const pizzas = useDataStore((s) => s.pizzas);
   const t = useMessages('site');
   const fmt = useFormat();
+  // No published reviews yet (fresh install): hide the section instead of an empty heading.
+  if (!reviews.length) return null;
   return (
     <Box component="section" className="overflow-hidden py-20">
       <Box className="container-page">
