@@ -21,9 +21,9 @@ import { PizzaCard } from './PizzaCard';
 import { useDataStore } from '@/store/dataStore';
 import { notify } from '@/store/uiStore';
 import { contactService } from '@/services';
-import { IMAGES, advantagesMock, orderStepsMock } from '@/mocks';
+import { IMAGES, advantagesMock, demoReviewsMock, orderStepsMock } from '@/mocks';
 import { ROUTES } from '@/constants';
-import { useFormat, useMessages } from '@/i18n/client';
+import { useFormat, useLocale, useMessages } from '@/i18n/client';
 import { vm } from '@/i18n/validation';
 
 export function HeroSection() {
@@ -273,29 +273,44 @@ export function AdvantagesGrid({ withHeading = true }: { withHeading?: boolean }
 
 export function Testimonials() {
   const all = useDataStore((s) => s.reviews);
-  const reviews = React.useMemo(() => all.filter((r) => r.published && r.rating >= 4).slice(0, 6), [all]);
   const pizzas = useDataStore((s) => s.pizzas);
+  const locale = useLocale();
   const t = useMessages('site');
   const fmt = useFormat();
-  // No published reviews yet (fresh install): hide the section instead of an empty heading.
-  if (!reviews.length) return null;
+  const reviews = React.useMemo(() => {
+    const real = all.filter((r) => r.published && r.rating >= 4).slice(0, 6);
+    if (real.length) return real.map((r) => ({ ...r, pizzaName: pizzas.find((p) => p.id === r.pizzaId)?.name }));
+    // No published review yet: show sample testimonials until real ones exist.
+    return demoReviewsMock.map((r) => ({
+      id: r.id,
+      customerName: r.customerName,
+      avatar: undefined as string | undefined,
+      rating: r.rating,
+      date: r.date,
+      comment: r.comment[locale],
+      pizzaName: pizzas.find((p) => p.slug === r.pizzaSlug)?.name,
+    }));
+  }, [all, pizzas, locale]);
   return (
     <Box component="section" className="overflow-hidden py-20">
       <Box className="container-page">
         <SectionHeading eyebrow={t.testimonialsEyebrow} title={t.testimonialsTitle} />
       </Box>
-      <Box className="no-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto px-4 pb-4 sm:px-6 lg:px-[max(2rem,calc((100vw-80rem)/2+2rem))]">
+      <Box className="no-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 scroll-px-5 sm:px-8 sm:scroll-px-8 lg:px-[max(2.5rem,calc((100vw-80rem)/2+2.5rem))] lg:scroll-px-[max(2.5rem,calc((100vw-80rem)/2+2.5rem))] xl:px-[max(4rem,calc((100vw-80rem)/2+4rem))] xl:scroll-px-[max(4rem,calc((100vw-80rem)/2+4rem))]">
         {reviews.map((r, i) => (
           <Reveal key={r.id} delay={i * 0.05} className="w-[85vw] max-w-[380px] shrink-0 snap-start">
             <Card className="h-full p-6">
               <FormatQuoteRounded className="text-4xl text-ember-300" />
               <Typography className="mt-2 min-h-[96px]">{r.comment}</Typography>
               <Box className="mt-5 flex items-center gap-3">
-                <Avatar src={r.avatar} alt={r.customerName} />
+                <Avatar src={r.avatar} alt={r.customerName}>
+                  {r.customerName.charAt(0)}
+                </Avatar>
                 <Box>
                   <Typography fontWeight={800}>{r.customerName}</Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {pizzas.find((p) => p.id === r.pizzaId)?.name} · {fmt.date(r.date)}
+                    {r.pizzaName ? `${r.pizzaName} · ` : ''}
+                    {fmt.date(r.date)}
                   </Typography>
                 </Box>
                 <Rating value={r.rating} readOnly size="small" className="ml-auto" />

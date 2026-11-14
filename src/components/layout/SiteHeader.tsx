@@ -69,7 +69,7 @@ export function SiteHeader() {
       >
         <Toolbar className="container-page min-h-[72px] gap-2">
           <Logo />
-          <Box component="nav" aria-label={t.mainNav} className="mx-auto hidden items-center gap-1 lg:flex">
+          <Box component="nav" aria-label={t.mainNav} className="mx-auto hidden items-center gap-1 xl:flex">
             {NAV.map((item) => (
               <Button
                 key={item.href}
@@ -77,14 +77,14 @@ export function SiteHeader() {
                 href={item.href}
                 color="inherit"
                 aria-current={isActive(item.href) ? 'page' : undefined}
-                className={cn('relative px-4 font-semibold', isActive(item.href) ? 'text-tomato-500' : 'text-charcoal-700')}
+                className={cn('relative whitespace-nowrap px-3 font-semibold xl:px-4', isActive(item.href) ? 'text-tomato-500' : 'text-charcoal-700')}
               >
                 {t.nav[item.key]}
-                {isActive(item.href) && <motion.span layoutId="nav-underline" className="absolute bottom-1 left-4 right-4 h-0.5 rounded-full bg-tomato-500" />}
+                {isActive(item.href) && <motion.span layoutId="nav-underline" className="absolute bottom-1 left-3 right-3 h-0.5 xl:left-4 xl:right-4 rounded-full bg-tomato-500" />}
               </Button>
             ))}
           </Box>
-          <Box className="ml-auto flex items-center gap-1 lg:ml-0">
+          <Box className="ml-auto flex items-center gap-1 xl:ml-0">
             <Box className="hidden sm:block">
               <LanguageSwitcher />
             </Box>
@@ -116,7 +116,7 @@ export function SiteHeader() {
             <Button component={Link} href={ROUTES.menu} variant="contained" className="hidden md:inline-flex">
               {t.order}
             </Button>
-            <IconButton aria-label={t.openMenu} className="lg:hidden" onClick={() => setMobileOpen(true)}>
+            <IconButton aria-label={t.openMenu} className="xl:hidden" onClick={() => setMobileOpen(true)}>
               <MenuRounded />
             </IconButton>
           </Box>
