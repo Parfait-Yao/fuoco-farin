@@ -101,7 +101,7 @@ export const userService = {
       const count = await tx.address.count({ where: { userId: user.id } });
       const makeDefault = Boolean(input.isDefault) || count === 0 || (count === 1 && Boolean(id));
       if (makeDefault) await tx.address.updateMany({ where: { userId: user.id, isDefault: true }, data: { isDefault: false } });
-      const data = { label: input.label, street: input.street, district: input.district, city: input.city, details: input.details ?? null, ...(makeDefault ? { isDefault: true } : {}) };
+      const data = { label: input.label, street: input.street, district: input.district, city: input.city, details: input.details ?? null, latitude: input.latitude ?? null, longitude: input.longitude ?? null, ...(makeDefault ? { isDefault: true } : {}) };
       if (id) await tx.address.update({ where: { id }, data });
       else await tx.address.create({ data: { ...data, userId: user.id } });
     });

@@ -16,6 +16,8 @@ export const addressSchema = z.object({
   district: text(80, 1),
   city: text(80, 2),
   details: text(140).optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
   isDefault: z.boolean().optional(),
 });
 

@@ -4,6 +4,19 @@ import { defineMessages } from '../define';
 export default defineMessages({
   fr: {
     skipToContent: 'Aller au contenu',
+    geo: {
+      useMyLocation: 'Utiliser ma position actuelle',
+      locating: 'Localisation en cours…',
+      hint: 'Facultatif : autorisez la localisation pour remplir l’adresse automatiquement, ou saisissez-la vous-même.',
+      located: (meters: number) => `Position GPS enregistrée (précision ± ${meters} m). Vérifiez et complétez l’adresse si besoin.`,
+      remove: 'Retirer la position',
+      denied: 'Localisation refusée. Autorisez-la dans votre navigateur ou saisissez l’adresse manuellement.',
+      unavailable: 'Position introuvable pour le moment. Saisissez l’adresse manuellement.',
+      timeout: 'La localisation a pris trop de temps. Réessayez ou saisissez l’adresse manuellement.',
+      unsupported: 'Votre navigateur ne permet pas la localisation. Saisissez l’adresse manuellement.',
+      noAddress: 'Position enregistrée, mais l’adresse n’a pas pu être déterminée. Complétez les champs.',
+      viewOnMap: 'Voir la position GPS sur la carte',
+    },
     accountNav: {
       dashboard: 'Tableau de bord',
       orders: 'Mes commandes',
@@ -185,6 +198,19 @@ export default defineMessages({
   },
   en: {
     skipToContent: 'Skip to content',
+    geo: {
+      useMyLocation: 'Use my current location',
+      locating: 'Locating…',
+      hint: 'Optional: allow location access to fill in the address automatically, or type it yourself.',
+      located: (meters: number) => `GPS position saved (accuracy ± ${meters} m). Check and complete the address if needed.`,
+      remove: 'Remove position',
+      denied: 'Location access denied. Allow it in your browser or type the address manually.',
+      unavailable: 'Position not available right now. Type the address manually.',
+      timeout: 'Locating took too long. Try again or type the address manually.',
+      unsupported: 'Your browser does not support location. Type the address manually.',
+      noAddress: 'Position saved, but the address could not be found. Fill in the fields.',
+      viewOnMap: 'View GPS position on the map',
+    },
     accountNav: {
       dashboard: 'Dashboard',
       orders: 'My orders',

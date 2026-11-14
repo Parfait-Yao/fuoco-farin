@@ -14,7 +14,7 @@ import HomeRounded from '@mui/icons-material/HomeRounded';
 import LockRounded from '@mui/icons-material/LockRounded';
 import EditRounded from '@mui/icons-material/EditRounded';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FormTextField } from '@/components/ui';
+import { FormTextField, LocateMeButton, mapUrl, type LocatedAddress } from '@/components/ui';
 import { CartLine } from '@/features/cart/CartLine';
 import { CartTotals } from '@/features/cart/CartSummary';
 import { useCartTotals } from '@/hooks';
@@ -56,12 +56,26 @@ export function CartStep() {
 
 export function AddressStep({ control, setValue, addresses }: StepProps & { addresses: Address[] }) {
   const street = useWatch({ control, name: 'street' });
+  const latitude = useWatch({ control, name: 'latitude' });
   const t = useMessages('checkout');
   const fill = (a: Address) => {
     setValue('street', a.street, { shouldValidate: true });
     setValue('district', a.district, { shouldValidate: true });
     setValue('city', a.city, { shouldValidate: true });
     setValue('details', a.details ?? '');
+    setValue('latitude', a.latitude);
+    setValue('longitude', a.longitude);
+  };
+  const onLocated = (r: LocatedAddress) => {
+    setValue('latitude', r.latitude);
+    setValue('longitude', r.longitude);
+    if (r.street) setValue('street', r.street, { shouldValidate: true });
+    if (r.district) setValue('district', r.district, { shouldValidate: true });
+    if (r.city) setValue('city', r.city, { shouldValidate: true });
+  };
+  const clearPosition = () => {
+    setValue('latitude', undefined);
+    setValue('longitude', undefined);
   };
   return (
     <Box className="space-y-5">
@@ -78,6 +92,7 @@ export function AddressStep({ control, setValue, addresses }: StepProps & { addr
           <Divider className="my-5">{t.orEnterAddress}</Divider>
         </Box>
       )}
+      <LocateMeButton onLocated={onLocated} onClear={clearPosition} hasPosition={latitude !== undefined} />
       <Box className="grid gap-4 sm:grid-cols-2">
         <FormTextField control={control} name="street" label={t.street} autoComplete="street-address" required className="sm:col-span-2" />
         <FormTextField control={control} name="district" label={t.district} select required>
@@ -168,6 +183,7 @@ export function ReviewStep({ control, goTo }: StepProps) {
   const { items } = useCartTotals();
   const t = useMessages('checkout');
   const domain = useMessages('domain');
+  const geo = useMessages('common').geo;
   const locale = useLocale();
   const fmt = useFormat();
   return (
@@ -188,6 +204,11 @@ export function ReviewStep({ control, goTo }: StepProps) {
         <SummaryBlock title={t.address} onEdit={() => goTo(1)}>
           {values.street}, {values.district}, {values.city}
           {values.details && <div className="italic">{values.details}</div>}
+          {values.latitude !== undefined && values.longitude !== undefined && (
+            <MuiLink href={mapUrl({ latitude: values.latitude, longitude: values.longitude })} target="_blank" rel="noopener noreferrer">
+              {geo.viewOnMap}
+            </MuiLink>
+          )}
         </SummaryBlock>
         <SummaryBlock title={t.contact} onEdit={() => goTo(2)}>
           {values.fullName}

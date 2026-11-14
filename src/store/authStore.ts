@@ -89,7 +89,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   saveAddress: async (address) => {
-    const body = { label: address.label, street: address.street, district: address.district, city: address.city, details: address.details ?? null, isDefault: Boolean(address.isDefault) };
+    const body = { label: address.label, street: address.street, district: address.district, city: address.city, details: address.details ?? null, latitude: address.latitude ?? null, longitude: address.longitude ?? null, isDefault: Boolean(address.isDefault) };
     const addresses = isUuid(address.id) && get().user?.addresses.some((a) => a.id === address.id)
       ? await api.put<Address[]>(`/api/account/addresses/${address.id}`, body)
       : await api.post<Address[]>('/api/account/addresses', body);

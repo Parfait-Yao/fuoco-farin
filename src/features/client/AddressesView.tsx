@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Box, Button, Card, Checkbox, Chip, FormControlLabel, IconButton, MenuItem, Tooltip, Typography } from '@mui/material';
@@ -11,7 +11,7 @@ import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import PlaceRounded from '@mui/icons-material/PlaceRounded';
 import StarRounded from '@mui/icons-material/StarRounded';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AppDialog, ConfirmDialog, EmptyState, FormTextField, LoadingButton, PageHeader, useConfirm } from '@/components/ui';
+import { AppDialog, ConfirmDialog, EmptyState, FormTextField, LoadingButton, LocateMeButton, PageHeader, useConfirm, type LocatedAddress } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { attempt } from '@/store/uiStore';
 import { ABIDJAN_DISTRICTS } from '@/constants';
@@ -25,17 +25,31 @@ const addressSchema = z.object({
   district: z.string().min(1, vm('chooseOption')),
   city: z.string().min(2, vm('minChars', 2)),
   details: z.string().max(140).optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
   isDefault: z.boolean(),
 });
 type AddressValues = z.infer<typeof addressSchema>;
 
 const NO_ADDRESSES: Address[] = [];
-const EMPTY: AddressValues ={ label: '', street: '', district: '', city: 'Abidjan', details: '', isDefault: false };
+const EMPTY: AddressValues = { label: '', street: '', district: '', city: 'Abidjan', details: '', latitude: undefined, longitude: undefined, isDefault: false };
 
 function AddressDialog({ open, address, onClose }: { open: boolean; address: Address | null; onClose: () => void }) {
   const saveAddress = useAuthStore((s) => s.saveAddress);
   const t = useMessages('account');
-  const { control, handleSubmit, reset, formState } = useForm<AddressValues>({ resolver: zodResolver(addressSchema), defaultValues: EMPTY });
+  const { control, handleSubmit, reset, setValue, formState } = useForm<AddressValues>({ resolver: zodResolver(addressSchema), defaultValues: EMPTY });
+  const latitude = useWatch({ control, name: 'latitude' });
+  const onLocated = (r: LocatedAddress) => {
+    setValue('latitude', r.latitude);
+    setValue('longitude', r.longitude);
+    if (r.street) setValue('street', r.street, { shouldValidate: true });
+    if (r.district) setValue('district', r.district, { shouldValidate: true });
+    if (r.city) setValue('city', r.city, { shouldValidate: true });
+  };
+  const clearPosition = () => {
+    setValue('latitude', undefined);
+    setValue('longitude', undefined);
+  };
 
   React.useEffect(() => {
     if (open) reset(address ? { ...EMPTY, ...address, details: address.details ?? '', isDefault: Boolean(address.isDefault) } : EMPTY);
@@ -63,6 +77,9 @@ function AddressDialog({ open, address, onClose }: { open: boolean; address: Add
       }
     >
       <Box component="form" onSubmit={onSubmit} noValidate className="grid gap-4 pt-2 sm:grid-cols-2">
+        <Box className="sm:col-span-2">
+          <LocateMeButton key={String(open)} onLocated={onLocated} onClear={clearPosition} hasPosition={latitude !== undefined} />
+        </Box>
         <FormTextField control={control} name="label" label={t.addressName} placeholder={t.addressNamePlaceholder} required />
         <FormTextField control={control} name="district" label={t.district} select required>
           {ABIDJAN_DISTRICTS.map((d) => (

@@ -41,7 +41,7 @@ export const orderService = {
       deliveryMode: input.deliveryMode,
       promoCode: input.promoCode,
       contact: input.contact,
-      address: { street: input.address.street, district: input.address.district, city: input.address.city, details: input.address.details },
+      address: { street: input.address.street, district: input.address.district, city: input.address.city, details: input.address.details, latitude: input.address.latitude, longitude: input.address.longitude },
       paymentMethod: input.paymentMethod,
     });
     if (input.paymentMethod === 'cash') return { order, guestToken };

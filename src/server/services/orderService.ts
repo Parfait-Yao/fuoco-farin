@@ -102,6 +102,8 @@ export const orderService = {
             district: input.address.district,
             city: input.address.city,
             details: input.address.details ?? null,
+            latitude: input.address.latitude ?? null,
+            longitude: input.address.longitude ?? null,
             subtotal: quote.subtotal,
             deliveryFee: quote.deliveryFee,
             discount: quote.discount,
@@ -190,11 +192,31 @@ export const orderService = {
     return rows.map(toOrder);
   },
 
-  /** Admin status change. Forward-only; online orders must be paid before going to the kitchen. */
+  /**
+   * Admin status change. Forward-only; online orders must be paid before going to the kitchen.
+   * DELIVERED is set by the customer who receives the order (see confirmReceipt).
+   * Only guest orders, whose customer has no account, can be closed by the admin.
+   */
   async updateStatus(id: string, status: OrderStatus, actor: SessionUser, note?: string) {
     const target = toDbOrderStatus(status);
     if (target === 'CANCELLED') return this.cancel(id, actor, note);
     const order = await loadOrder(id);
+    if (target === 'DELIVERED' && order.userId) throw conflict(msg().customerConfirmsDelivery);
+    return this.applyStatus(order, target, actor, note);
+  },
+
+  /** The customer confirms they received the order: it becomes DELIVERED for everyone (admin included, live). */
+  async confirmReceipt(id: string, user: SessionUser) {
+    const order = await loadOrder(id);
+    if (order.userId !== user.id) throw notFound(msg().orderNotFound);
+    if (order.status !== 'SENT_FOR_DELIVERY') throw conflict(msg().notOnTheWayYet);
+    return this.applyStatus(order, 'DELIVERED', user, msg().receivedByCustomer);
+  },
+
+  /** Forward status change shared by the admin and the customer receipt confirmation. */
+  async applyStatus(order: OrderWithRelations, target: DbOrderStatus, actor: SessionUser, note?: string) {
+    const id = order.id;
+    const status = fromOrderStatus(target);
     if (!canTransition(order.status, target)) {
       const labels = getMessages('domain').orderStatus;
       throw conflict(msg().transitionImpossible(labels[fromOrderStatus(order.status)].label, labels[status].label));

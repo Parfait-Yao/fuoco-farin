@@ -92,6 +92,8 @@ interface DataState {
   setThreshold: (ingredientId: string, threshold: number) => Promise<void>;
   setOrderStatus: (id: string, status: OrderStatus, note?: string) => Promise<Order>;
   cancelOrder: (id: string, reason?: string) => Promise<Order>;
+  /** Customer confirms receipt: the order becomes delivered. */
+  confirmReceipt: (id: string) => Promise<Order>;
   setCustomerStatus: (id: string, status: Customer['status']) => Promise<void>;
   upsertPromotion: (promotion: Promotion) => Promise<Promotion>;
   deletePromotion: (id: string) => Promise<void>;
@@ -290,6 +292,11 @@ export const useDataStore = create<DataState>()((set, get) => {
         get().status.admin === 'ready'
           ? await api.patch<Order>(`/api/admin/orders/${id}/status`, { status, note })
           : await api.post<Order>(`/api/orders/${id}/cancel`, { reason: note });
+      set((s) => ({ orders: upsert(s.orders, order) }));
+      return order;
+    },
+    confirmReceipt: async (id) => {
+      const order = await api.post<Order>(`/api/orders/${id}/received`, {});
       set((s) => ({ orders: upsert(s.orders, order) }));
       return order;
     },

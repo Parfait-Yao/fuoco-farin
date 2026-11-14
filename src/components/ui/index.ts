@@ -13,3 +13,4 @@ export * from './ToastHost';
 export * from './NotificationsView';
 export * from './MotionPaper';
 export * from './LanguageSwitcher';
+export * from './LocateMeButton';

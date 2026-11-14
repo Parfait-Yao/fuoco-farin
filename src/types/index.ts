@@ -118,6 +118,9 @@ export interface Address {
   district: string;
   city: string;
   details?: string;
+  /** Exact GPS position, only when the customer shared it. */
+  latitude?: number;
+  longitude?: number;
   isDefault?: boolean;
 }
 

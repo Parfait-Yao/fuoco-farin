@@ -24,16 +24,23 @@ import { downloadCsv } from '@/lib/utils';
 import { ORDER_FLOW, PAYMENT_METHOD_KEYS, ROUTES } from '@/constants';
 import type { Order, OrderStatus, PaymentMethod } from '@/types';
 
-/** Next status in the normal flow, if any. */
-export const nextStatus = (s: OrderStatus): OrderStatus | null => {
-  const i = ORDER_FLOW.indexOf(s);
-  return i >= 0 && i < ORDER_FLOW.length - 1 ? ORDER_FLOW[i + 1] : null;
+/**
+ * "Delivered" is confirmed by the customer who receives the order (live update
+ * on the admin side). Only guest orders, without an account, are closed by the admin.
+ */
+const customerConfirms = (order: Order) => Boolean(order.customerId);
+
+/** Next status the admin can set in the normal flow, if any. */
+export const nextStatus = (order: Order): OrderStatus | null => {
+  const i = ORDER_FLOW.indexOf(order.status);
+  const next = i >= 0 && i < ORDER_FLOW.length - 1 ? ORDER_FLOW[i + 1] : null;
+  return next === 'delivered' && customerConfirms(order) ? null : next;
 };
 
 function OrderActions({ order, onCancel }: { order: Order; onCancel: (o: Order) => void }) {
   const [anchor, setAnchor] = React.useState<HTMLElement | null>(null);
   const setStatus = useDataStore((s) => s.setOrderStatus);
-  const next = nextStatus(order.status);
+  const next = nextStatus(order);
   const t = useMessages('admin');
   const labels = useMessages('domain').orderStatus;
   return (
@@ -237,8 +244,11 @@ export function OrderAdminDetail({ id }: { id: string }) {
 
   const finished = order.status === 'delivered' || order.status === 'cancelled';
   // Forward-only flow (enforced by the API): later steps, or cancellation.
-  const options = finished ? [] : ([...ORDER_FLOW.slice(ORDER_FLOW.indexOf(order.status) + 1), 'cancelled'] as OrderStatus[]);
+  const options = finished
+    ? []
+    : ([...ORDER_FLOW.slice(ORDER_FLOW.indexOf(order.status) + 1).filter((s) => s !== 'delivered' || !customerConfirms(order)), 'cancelled'] as OrderStatus[]);
   const awaitingPayment = order.paymentMethod === 'card' && order.paymentStatus !== 'paid';
+  const next = nextStatus(order);
 
   const apply = async () => {
     if (!target) return;
@@ -294,19 +304,21 @@ export function OrderAdminDetail({ id }: { id: string }) {
                 {t.awaitingPayment}
               </Typography>
             )}
-            {nextStatus(order.status) && (
+            {order.status === 'delivering' && customerConfirms(order) && (
+              <Typography variant="body2" color="info.main" className="mb-3">
+                {t.awaitingCustomerReceipt}
+              </Typography>
+            )}
+            {next && (
               <Button
                 fullWidth
                 variant="contained"
                 className="mb-3"
                 endIcon={<ArrowForwardRounded />}
                 disabled={awaitingPayment}
-                onClick={() => {
-                  const next = nextStatus(order.status)!;
-                  void attempt(setStatus(order.id, next), t.statusUpdated(labels[next].label));
-                }}
+                onClick={() => void attempt(setStatus(order.id, next), t.statusUpdated(labels[next].label))}
               >
-                {labels[nextStatus(order.status)!].label}
+                {labels[next].label}
               </Button>
             )}
             <FormControl fullWidth size="small" className="mb-3">

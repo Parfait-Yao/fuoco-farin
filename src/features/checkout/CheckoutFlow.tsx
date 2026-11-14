@@ -92,6 +92,8 @@ export function CheckoutFlow() {
       district: address?.district ?? values.district,
       city: address?.city ?? values.city,
       details: address?.details ?? values.details,
+      latitude: address ? address.latitude : values.latitude,
+      longitude: address ? address.longitude : values.longitude,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, user?.id]);
@@ -133,7 +135,7 @@ export function CheckoutFlow() {
     try {
       const { order, guestToken } = await orderService.placeOrder({
         contact: { fullName: values.fullName, email: values.email, phone: values.phone },
-        address: { street: values.street, district: values.district, city: values.city, details: values.details || undefined },
+        address: { street: values.street, district: values.district, city: values.city, details: values.details || undefined, latitude: values.latitude, longitude: values.longitude },
         items: totals.items,
         promoCode: totals.promo?.code,
         deliveryMode: values.deliveryMode,

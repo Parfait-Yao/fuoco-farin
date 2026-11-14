@@ -9,6 +9,8 @@ export const checkoutSchema = z
     district: z.string().min(1, vm('chooseOption')),
     city: z.string().min(2, vm('minChars', 2)),
     details: z.string().max(140, vm('maxChars', 140)).optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
     fullName: z.string().min(3, vm('minChars', 3)),
     email: z.string().email(vm('invalidEmail')),
     phone: z.string().regex(phoneRegex, vm('phoneFormat')),

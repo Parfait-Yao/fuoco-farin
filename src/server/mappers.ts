@@ -70,7 +70,7 @@ export function toUser(u: DbUser, addresses: DbAddress[] = []): User {
 }
 
 export function toAddress(a: DbAddress): Address {
-  return { id: a.id, label: a.label, street: a.street, district: a.district, city: a.city, details: a.details ?? undefined, isDefault: a.isDefault };
+  return { id: a.id, label: a.label, street: a.street, district: a.district, city: a.city, details: a.details ?? undefined, latitude: a.latitude ?? undefined, longitude: a.longitude ?? undefined, isDefault: a.isDefault };
 }
 
 export function toCustomer(u: DbUser & { addresses?: DbAddress[] }): Customer {
@@ -216,7 +216,7 @@ export function toOrder(o: OrderWithRelations): Order {
     history: [...o.history]
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .map((h) => ({ status: fromOrderStatus(h.status), date: iso(h.createdAt), note: h.note ?? undefined })),
-    address: { street: o.street ?? '', district: o.district ?? '', city: o.city ?? '', details: o.details ?? undefined },
+    address: { street: o.street ?? '', district: o.district ?? '', city: o.city ?? '', details: o.details ?? undefined, latitude: o.latitude ?? undefined, longitude: o.longitude ?? undefined },
     deliveryMode: fromDeliveryMode(o.deliveryMode),
     paymentMethod: fromPaymentMethod(o.paymentMethod),
     paymentStatus: fromPaymentStatus(o.paymentStatus),

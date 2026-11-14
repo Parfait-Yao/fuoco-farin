@@ -215,8 +215,17 @@ describe.skipIf(!TEST_DB)('integration (TEST_DATABASE_URL)', () => {
     const yassa = await pizza('poulet-yassa');
     const order = await s.orderService.create({ items: [{ pizzaId: yassa.id, size: 'medium', quantity: 1, removedIngredients: [] }], deliveryMode: 'pickup', contact, address, paymentMethod: 'cash' }, client);
     await expect(s.reviewService.create(client, { orderId: order.id, pizzaId: yassa.id, rating: 5, comment: 'Excellente !' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    await s.orderService.updateStatus(order.id, 'delivered', admin);
+    // The customer who receives the order closes it, not the admin.
+    await expect(s.orderService.confirmReceipt(order.id, client)).rejects.toMatchObject({ code: 'CONFLICT' });
+    await s.orderService.updateStatus(order.id, 'delivering', admin);
+    await expect(s.orderService.updateStatus(order.id, 'delivered', admin)).rejects.toMatchObject({ code: 'CONFLICT' });
+    const stranger = await makeUser();
+    await expect(s.orderService.confirmReceipt(order.id, stranger)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    const received = await s.orderService.confirmReceipt(order.id, client);
+    expect(received.status).toBe('delivered');
     expect((await s.prisma.order.findUniqueOrThrow({ where: { id: order.id } })).paymentStatus).toBe('PAID');
+    expect(await s.prisma.payment.count({ where: { orderId: order.id, provider: 'CASH', status: 'CAPTURED' } })).toBe(1);
+    await expect(s.orderService.confirmReceipt(order.id, client)).rejects.toMatchObject({ code: 'CONFLICT' });
     const review = await s.reviewService.create(client, { orderId: order.id, pizzaId: yassa.id, rating: 4, comment: 'Très bonne pizza' });
     expect(review.published).toBe(false);
     await s.reviewService.setPublished(review.id, true, admin.id);

@@ -42,6 +42,8 @@ export const createOrderSchema = quoteSchema.extend({
     district: text(80, 1),
     city: text(80, 2),
     details: text(140).optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
   }),
   paymentMethod: z.enum(['orange_money', 'mtn_momo', 'wave', 'card', 'cash']),
   note: text(300).optional(),

@@ -18,6 +18,7 @@ import { useDataLoading } from '@/hooks';
 import { BRAND, ORDER_FLOW, ROUTES } from '@/constants';
 import { useFormat, useMessages } from '@/i18n/client';
 import { OrderTimeline } from './OrderTimeline';
+import { ConfirmReceiptCard } from './ConfirmReceiptCard';
 
 export function TrackingView({ id }: { id: string }) {
   const loading = useDataLoading();
@@ -101,6 +102,7 @@ export function TrackingView({ id }: { id: string }) {
           </Box>
         </Card>
         <Box className="space-y-4">
+          <ConfirmReceiptCard order={order} />
           <Card className="p-5">
             <Typography fontWeight={800} className="mb-3">
               {t.yourDriver}

@@ -188,6 +188,9 @@ model Address {
   district  String
   city      String
   details   String?
+  /// Exact GPS position, only when the customer shared it.
+  latitude  Float?
+  longitude Float?
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -418,6 +421,9 @@ model Order {
   district String?
   city     String?
   details  String?
+  /// Exact GPS position for the driver, only when the customer shared it.
+  latitude  Float?
+  longitude Float?
 
   /// Language of the customer when ordering, used for order emails.
   locale      String  @default("fr")

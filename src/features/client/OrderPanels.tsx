@@ -1,11 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { Box, Card, Chip, Divider, Typography } from '@mui/material';
+import { Box, Card, Chip, Divider, Link as MuiLink, Typography } from '@mui/material';
 import PlaceRounded from '@mui/icons-material/PlaceRounded';
 import PaymentsRounded from '@mui/icons-material/PaymentsRounded';
 import PersonRounded from '@mui/icons-material/PersonRounded';
-import { PizzaImage } from '@/components/ui';
+import { PizzaImage, mapUrl } from '@/components/ui';
 import { MiniPizzaPreview } from '@/features/builder/PizzaPreview';
 import { useFormat, useMessages } from '@/i18n/client';
 import type { Order } from '@/types';
@@ -91,6 +91,7 @@ export function OrderInfoCards({ order, showCustomer }: { order: Order; showCust
   const paymentColor = order.paymentStatus === 'paid' ? 'success' : order.paymentStatus === 'failed' ? 'error' : order.paymentStatus === 'pending' ? 'warning' : 'default';
   const t = useMessages('account');
   const domain = useMessages('domain');
+  const geo = useMessages('common').geo;
   const paymentLabel = domain.paymentStatus[order.paymentStatus];
   return (
     <Box className="grid gap-4">
@@ -111,6 +112,11 @@ export function OrderInfoCards({ order, showCustomer }: { order: Order; showCust
               {order.address.district}, {order.address.city}
             </div>
             {order.address.details && <div className="italic">{order.address.details}</div>}
+            {order.address.latitude !== undefined && order.address.longitude !== undefined && (
+              <MuiLink href={mapUrl({ latitude: order.address.latitude, longitude: order.address.longitude })} target="_blank" rel="noopener noreferrer">
+                {geo.viewOnMap}
+              </MuiLink>
+            )}
           </>
         )}
       </InfoCard>

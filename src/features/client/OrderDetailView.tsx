@@ -17,6 +17,7 @@ import { useFormat, useMessages } from '@/i18n/client';
 import { ROUTES } from '@/constants';
 import { OrderInfoCards, OrderItemsCard } from './OrderPanels';
 import { OrderTimeline } from './OrderTimeline';
+import { ConfirmReceiptCard } from './ConfirmReceiptCard';
 import { isActiveOrder, useReorder } from './hooks';
 
 function ReviewDialog({ open, onClose, orderId, pizzas, orderNumber }: { open: boolean; onClose: () => void; orderId: string; pizzas: { id: string; name: string }[]; orderNumber: string }) {
@@ -127,6 +128,7 @@ export function OrderDetailView({ id }: { id: string }) {
           </Card>
         </Box>
         <Box className="space-y-4">
+          <ConfirmReceiptCard order={order} />
           <OrderInfoCards order={order} />
           {order.status === 'received' && (
             <Alert
