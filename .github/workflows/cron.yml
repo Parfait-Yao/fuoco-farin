@@ -1,0 +1,27 @@
+# Frequent scheduled jobs. Vercel Hobby only allows daily crons (see vercel.json),
+# so GitHub Actions calls the cron endpoints more often.
+# Required repository secrets: APP_URL (e.g. https://my-app.vercel.app) and CRON_SECRET.
+# Note: GitHub may delay scheduled runs by a few minutes under load.
+name: cron
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: expire-payments (every 5 min)
+        run: |
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/expire-payments"
+      - name: stock-alerts (every 15 min)
+        run: |
+          minute=$(date -u +%M)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ $((10#$minute % 15)) -lt 5 ]; then
+            curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "${{ secrets.APP_URL }}/api/cron/stock-alerts"
+          fi
