@@ -7,6 +7,37 @@ Online pizza ordering website for a restaurant in Abidjan.
 
 Built with Next.js 14, TypeScript, MUI, Prisma and Supabase (database and authentication).
 
+## Test the project
+
+**Live site:** https://fuoco-farin.vercel.app (English by default, **FR / EN** button in the header)
+
+### Accounts
+
+| Role | Login page | Email | Password |
+| --- | --- | --- | --- |
+| Admin | [/admin/login](https://fuoco-farin.vercel.app/admin/login) | `admin@exemple.com` | `Admin123!` |
+| Customer | [/login](https://fuoco-farin.vercel.app/login) | your own email | your own password |
+
+There is no shared customer account. Create one at [/register](https://fuoco-farin.vercel.app/register) with a real email address: a verification code is sent to confirm it.
+
+### Customer scenario
+
+1. Browse the [menu](https://fuoco-farin.vercel.app/menu), or build a pizza in the [builder](https://fuoco-farin.vercel.app/builder).
+2. Add pizzas to the cart, then go to checkout.
+3. Optional: apply the promo code `BIENVENUE10` (10% off the first order, from $15).
+4. Pay:
+   - **Cash on delivery**, or
+   - **Card (Stripe test mode, no real money):** `4242 4242 4242 4242`, any future date (e.g. `12/34`), any CVC, any name.
+5. Follow the order in **My account > Orders** (live status).
+6. When the order is delivered, confirm receipt and leave a review.
+
+### Admin scenario
+
+1. Sign in at `/admin/login` with the admin account above.
+2. **Orders:** move the test order through *Order received > Preparing > Out for delivery > Delivered*. The customer sees each step live.
+3. **Reviews:** publish the customer review. Published reviews with 4 or 5 stars appear on the home page.
+4. Also try: pizzas, categories, ingredients and stock, promotions, customers and statistics.
+
 ## Requirements
 
 - Node.js 20+ and pnpm 9+
@@ -75,7 +106,7 @@ Prices are in **US dollars**. Every amount is stored as an integer number of cen
 
 The whole site, the customer area, the admin, the API error messages and the emails are available in French and English.
 
-- Visitors choose the language with the **FR / EN** button in the header (also in the dashboards and the auth pages). The choice is kept in the `locale` cookie; without it, the browser language decides. URLs do not change.
+- Visitors choose the language with the **FR / EN** button in the header (also in the dashboards and the auth pages). The choice is kept in the `locale` cookie; without it, the site is in English. Switching does not reload the page. URLs do not change.
 - Interface texts live in `src/i18n/messages/<namespace>.ts`, one file per area, with the French and English versions side by side. The English object must have exactly the French keys, so a missing translation fails `pnpm typecheck`.
 - Catalog texts (pizzas, categories, ingredients, promotions, slogan and opening hours) have an English column (`nameEn`, `descriptionEn`…), edited in the admin forms. An empty English text falls back to French.
 - Notifications and the activity feed are stored as a key plus variables and shown in the reader's language. Order emails use the language of the customer when ordering.
